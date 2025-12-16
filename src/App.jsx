@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Upload, Scissors, Trash2, Download, Settings, Loader2, Video, Info } from 'lucide-react';
+import { Upload, Scissors, Trash2, Download, Settings, Loader2, Video, Zap } from 'lucide-react';
 
 const App = () => {
   const [videoSrc, setVideoSrc] = useState(null);
@@ -8,12 +8,24 @@ const App = () => {
   const [processedVideoUrl, setProcessedVideoUrl] = useState(null);
   const [selection, setSelection] = useState(null); 
   const [outputFormat, setOutputFormat] = useState('mp4'); 
+  const [qualityPreset, setQualityPreset] = useState('normal'); // เพิ่ม state สำหรับ Preset
   const [isDragging, setIsDragging] = useState(false);
   const [startPos, setStartPos] = useState({ x: 0, y: 0 });
   
   const videoRef = useRef(null);
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
+
+  // --- Configuration ---
+  // กำหนดค่า Bitrate ตาม Preset (เลียนแบบ FFmpeg logic: ช้า=ชัด, เร็ว=ไม่เน้นชัด)
+  const PRESETS = {
+    'veryslow': { bitrate: 8000000, label: 'Very Slow (ชัดสูงสุด)' },
+    'slow':     { bitrate: 5000000, label: 'Slow (ชัดมาก)' },
+    'normal':   { bitrate: 2500000, label: 'Normal (มาตรฐาน)' },
+    'fast':     { bitrate: 1500000, label: 'Fast (ไฟล์เล็ก)' },
+    'veryfast': { bitrate: 800000,  label: 'Very Fast (ประหยัด)' },
+    'ultrafast':{ bitrate: 400000,  label: 'Ultrafast (เล็กสุด)' }
+  };
   
   // --- File Handling ---
   const handleFileUpload = (event) => {
@@ -108,9 +120,12 @@ const App = () => {
     const stream = canvas.captureStream(30); 
     const mimeType = getSupportedMimeType(outputFormat);
     
+    // เลือก Bitrate ตาม Preset ที่ user เลือก
+    const targetBitrate = PRESETS[qualityPreset].bitrate;
+
     const mediaRecorder = new MediaRecorder(stream, { 
       mimeType: mimeType,
-      videoBitsPerSecond: 2500000 
+      videoBitsPerSecond: targetBitrate 
     });
     
     const chunks = [];
@@ -231,23 +246,46 @@ const App = () => {
                 </div>
               ) : (
                 <>
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 text-sm text-gray-400">
-                      <Settings className="w-4 h-4" />
-                      <span>Format:</span>
+                  {/* Settings Grid */}
+                  <div className="grid grid-cols-2 gap-3 mb-2">
+                    {/* Format Selector */}
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-gray-400 flex items-center gap-1">
+                        <Settings className="w-3 h-3" /> Format
+                      </label>
+                      <select 
+                        value={outputFormat}
+                        onChange={(e) => setOutputFormat(e.target.value)}
+                        className="bg-gray-900 border border-gray-700 text-white text-xs rounded-lg block p-2 outline-none w-full"
+                      >
+                        <option value="mp4">MP4</option>
+                        <option value="webm">WebM</option>
+                        <option value="mkv">MKV</option>
+                        <option value="avi">AVI</option>
+                      </select>
                     </div>
-                    <select 
-                      value={outputFormat}
-                      onChange={(e) => setOutputFormat(e.target.value)}
-                      className="bg-gray-900 border border-gray-700 text-white text-sm rounded-lg block p-2 outline-none w-32"
-                    >
-                      <option value="mp4">MP4</option>
-                      <option value="webm">WebM</option>
-                      <option value="mkv">MKV</option>
-                      <option value="avi">AVI</option>
-                    </select>
+
+                    {/* Speed/Quality Preset Selector */}
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs text-gray-400 flex items-center gap-1">
+                        <Zap className="w-3 h-3" /> Quality
+                      </label>
+                      <select 
+                        value={qualityPreset}
+                        onChange={(e) => setQualityPreset(e.target.value)}
+                        className="bg-gray-900 border border-gray-700 text-white text-xs rounded-lg block p-2 outline-none w-full"
+                      >
+                        {Object.entries(PRESETS).map(([key, data]) => (
+                          <option key={key} value={key}>
+                            {data.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
-                  <div className="flex gap-2 border-t border-gray-700 pt-4">
+
+                  {/* Actions */}
+                  <div className="flex gap-2 border-t border-gray-700 pt-3">
                     <button 
                       onClick={processVideo}
                       disabled={!selection}
@@ -271,7 +309,9 @@ const App = () => {
         {processedVideoUrl && (
           <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4">
             <div className="bg-gray-800 rounded-xl overflow-hidden border border-green-500/30">
-              <div className="bg-green-500/10 p-3 text-green-400 text-sm font-medium text-center border-b border-green-500/20">เสร็จสิ้น ({outputFormat.toUpperCase()})</div>
+              <div className="bg-green-500/10 p-3 text-green-400 text-sm font-medium text-center border-b border-green-500/20">
+                เสร็จสิ้น ({outputFormat.toUpperCase()} - {qualityPreset})
+              </div>
               <video src={processedVideoUrl} controls className="w-full bg-black" playsInline />
             </div>
             <a 
